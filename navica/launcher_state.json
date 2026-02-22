@@ -1,0 +1,10 @@
+{
+  "repo_root": "",
+  "apps_catalog_path": "",
+  "overlap_window_days": 30,
+  "db_path": "",
+  "ui": {
+    "title": "NAVI-CA \u2014 Annoying but Helpful",
+    "tagline": "Keep errors boring: find gaps early so prod fixes are easy."
+  }
+}

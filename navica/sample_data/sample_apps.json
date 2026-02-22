@@ -1,0 +1,81 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-02-22T08:16:39.322192-05:00",
+  "apps": [
+    {
+      "app_id": "FI-Posting-Tools",
+      "display_name": "FI Posting Tools",
+      "owners": [
+        "FI Dev Team"
+      ],
+      "tags": [
+        "FI",
+        "Posting",
+        "Critical"
+      ],
+      "match_rules": {
+        "packages": [
+          "ZFI_*"
+        ],
+        "namespaces": [
+          "ZFI*",
+          "YFI*"
+        ],
+        "object_types": [
+          "PROG",
+          "REPS",
+          "CLAS",
+          "FUGR",
+          "CMOD",
+          "SMOD",
+          "ENHO",
+          "ENHS",
+          "SPOT"
+        ]
+      },
+      "repo": {
+        "repo_name": "s4-ficore",
+        "path": "apps/fi_posting_tools",
+        "sbom_hint": "github"
+      },
+      "criticality": 5
+    },
+    {
+      "app_id": "SD-Pricing-Enhancements",
+      "display_name": "SD Pricing Enhancements",
+      "owners": [
+        "SD Dev Team"
+      ],
+      "tags": [
+        "SD",
+        "Pricing"
+      ],
+      "match_rules": {
+        "packages": [
+          "ZSD_*"
+        ],
+        "namespaces": [
+          "ZSD*",
+          "YSD*"
+        ],
+        "object_types": [
+          "PROG",
+          "REPS",
+          "CLAS",
+          "FUGR",
+          "CMOD",
+          "SMOD",
+          "ENHO",
+          "ENHS",
+          "SPOT"
+        ]
+      },
+      "repo": {
+        "repo_name": "s4-sdcore",
+        "path": "apps/sd_pricing_enh",
+        "sbom_hint": "github"
+      },
+      "criticality": 4
+    }
+  ]
+}
