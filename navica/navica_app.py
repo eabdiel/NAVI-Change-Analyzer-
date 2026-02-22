@@ -19,6 +19,7 @@ import networkx as nx
 from navica.core.parser import parse_abap_object_text, load_objects_from_csv, load_objects_from_json
 from navica.core.mapping import load_app_catalog, map_objects_to_apps
 from navica.core.scoring import score_change
+from navica.core.exporter import render_checklist_html, render_checklist_pdf
 from navica.data.db import NavicaDB
 
 APP_TZ = timezone(timedelta(hours=-5))  # America/New_York offset (naive)
@@ -110,24 +111,27 @@ def build_document(doc):
     graph_fig = figure(height=520, sizing_mode="stretch_width", title="Risk Map (spider/network)")
     graph_fig.add_tools(HoverTool(tooltips=[("node", "@index")]))
 
-    def _build_graph(objects, impacted_apps):
+    def _build_graph(objects, impacted_apps, risk_points_by_key):
         # nodes: apps + objects; edges: app -> object for matched ones, otherwise change -> object
         G = nx.Graph()
         change_node = "CHANGE"
-        G.add_node(change_node, kind="change")
+        G.add_node(change_node, kind="change", risk_points=0)
 
         # Add object nodes
         for o in objects:
-            G.add_node(o["normalized_key"], kind="object")
+            nk = o["normalized_key"]
+            rp = int(risk_points_by_key.get(nk, 0))
+            G.add_node(nk, kind="object", risk_points=rp)
 
         # Add app nodes & edges
         for app in impacted_apps:
             aid = f"APP::{app['app_id']}"
-            G.add_node(aid, kind="app")
+            G.add_node(aid, kind="app", risk_points=0)
             # Connect to top objects for now
             for nk in app.get("top_objects", []):
                 if G.has_node(nk):
                     G.add_edge(aid, nk)
+
         # Connect change to all objects (keeps the graph from fragmenting)
         for o in objects:
             G.add_edge(change_node, o["normalized_key"])
@@ -136,11 +140,51 @@ def build_document(doc):
         pos = nx.spring_layout(G, seed=42, k=0.9)
         return G, pos
 
-    def _render_graph(objects, impacted_apps):
+    def _render_graph(objects, impacted_apps, findings):
         graph_fig.renderers.clear()
         if not objects:
             graph_fig.title.text = "Risk Map (spider/network) — (no data yet)"
             return
+
+        # Build lookup: object normalized_key -> risk_points
+        risk_points_by_key = {}
+        for r in (findings or {}).get("object_risks", []):
+            k = r.get("normalized_key")
+            if k:
+                risk_points_by_key[k] = int(r.get("risk_points", 0))
+
+        G, pos = _build_graph(objects, impacted_apps, risk_points_by_key)
+        gr = from_networkx(G, pos)
+
+        # Node size reflects risk points (objects), apps/change fixed.
+        ds = gr.node_renderer.data_source
+        idxs = list(ds.data.get("index", []))
+
+        sizes = []
+        for node in idxs:
+            kind = G.nodes[node].get("kind")
+            rp = int(G.nodes[node].get("risk_points", 0))
+            if kind == "object":
+                # map risk points -> size (bounded)
+                sizes.append(max(8, min(34, 6 + rp)))
+            elif kind == "app":
+                sizes.append(16)
+            else:  # change
+                sizes.append(18)
+
+        ds.data["size"] = sizes
+        # Show risk in hover via extra field
+        ds.data["risk_points"] = [int(G.nodes[n].get("risk_points", 0)) for n in idxs]
+        ds.data["kind"] = [G.nodes[n].get("kind", "") for n in idxs]
+
+        gr.node_renderer.glyph.size = "size"
+
+        # Upgrade hover
+        graph_fig.tools = [t for t in graph_fig.tools if not isinstance(t, HoverTool)]
+        graph_fig.add_tools(HoverTool(tooltips=[("node", "@index"), ("kind", "@kind"), ("risk", "@risk_points")]))
+
+        graph_fig.renderers.append(gr)
+        graph_fig.title.text = "Risk Map (spider/network) — object node size reflects risk points"
         G, pos = _build_graph(objects, impacted_apps)
         gr = from_networkx(G, pos)
         graph_fig.renderers.append(gr)
@@ -149,6 +193,8 @@ def build_document(doc):
     # ---- Export ----
     export_div = Div(text="")
     btn_export = Button(label="Export Findings JSON", button_type="success")
+    btn_export_html = Button(label="Export Tester Checklist (HTML)", button_type="default")
+    btn_export_pdf = Button(label="Export Tester Checklist (PDF)", button_type="default")
 
     latest_findings = {"data": None}
 
@@ -248,7 +294,7 @@ def build_document(doc):
             )
 
             # Risk map
-            _render_graph(objects, apps)
+            _render_graph(objects, apps, findings)
 
             status.text = "<b style='color:#060;'>Analysis complete.</b>"
 
@@ -266,8 +312,32 @@ def build_document(doc):
         out_path.write_text(json.dumps(f, indent=2), encoding="utf-8")
         export_div.text = f"✅ Exported: <code>{out_path}</code>"
 
+
+    def _export_html():
+        f = latest_findings["data"]
+        if not f:
+            export_div.text = "<b style='color:#b00;'>Nothing to export yet.</b>"
+            return
+        out_dir = db.ensure_out_dir()
+        ts = datetime.now(APP_TZ).strftime("%Y%m%d_%H%M%S")
+        out_path = out_dir / f"tester_scope_{f['change_id']}_{ts}.html"
+        render_checklist_html(f, out_path)
+        export_div.text = f"✅ Exported HTML: <code>{out_path}</code>"
+
+    def _export_pdf():
+        f = latest_findings["data"]
+        if not f:
+            export_div.text = "<b style='color:#b00;'>Nothing to export yet.</b>"
+            return
+        out_dir = db.ensure_out_dir()
+        ts = datetime.now(APP_TZ).strftime("%Y%m%d_%H%M%S")
+        out_path = out_dir / f"tester_scope_{f['change_id']}_{ts}.pdf"
+        render_checklist_pdf(f, out_path)
+        export_div.text = f"✅ Exported PDF: <code>{out_path}</code>"
     btn_analyze.on_click(_analyze)
     btn_export.on_click(_export)
+    btn_export_html.on_click(_export_html)
+    btn_export_pdf.on_click(_export_pdf)
 
     load_tab = column(
         row(change_id, overlap_days),
@@ -283,7 +353,7 @@ def build_document(doc):
     apps_tab = column(Div(text="<b>Impacted Apps</b>"), apps_tbl, sizing_mode="stretch_width")
     overlaps_tab = column(Div(text="<b>Overlaps (last N days)</b>"), overlaps_tbl, sizing_mode="stretch_width")
     riskmap_tab = column(graph_fig, sizing_mode="stretch_width")
-    export_tab = column(btn_export, export_div, sizing_mode="stretch_width")
+    export_tab = column(row(btn_export, btn_export_html, btn_export_pdf), export_div, sizing_mode="stretch_width")
 
     tabs = Tabs(tabs=[
         Panel(child=load_tab, title="Load"),

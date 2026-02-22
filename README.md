@@ -31,3 +31,8 @@ Update the match rules to reflect your packages/namespaces.
 
 ## Packaging (later)
 This starter kit includes placeholder files under `/packaging` for PyInstaller/Inno Setup.
+
+
+## Exports
+- Findings JSON
+- Tester Scope Checklist (HTML/PDF)
