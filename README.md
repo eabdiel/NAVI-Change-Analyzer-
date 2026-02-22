@@ -1,6 +1,6 @@
 # NAVI-CA (v0.1) — Annoying but Helpful
 
-**Mission:** Keep errors boring. NAVI-CA helps you find testing gaps early by:
+**Mission:** Keep errors boring. NAVI-ChangeAnalyzer helps you find testing gaps early by:
 - parsing ABAP object lists (paste/CSV/JSON)
 - mapping objects to custom apps (via `apps.json`)
 - detecting overlap across other changes
